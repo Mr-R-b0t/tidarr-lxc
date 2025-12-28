@@ -156,8 +156,11 @@ pct create "$CTID" "$TEMPLATE" \
 msg_ok "Created LXC container $CTID"
 
 msg_info "Configuring container for Docker"
-pct set "$CTID" -lxc.apparmor.profile unconfined
-pct set "$CTID" -lxc.cap.drop ""
+# Add Docker-friendly settings to LXC config
+cat >> /etc/pve/lxc/${CTID}.conf <<EOF
+lxc.apparmor.profile: unconfined
+lxc.cap.drop: 
+EOF
 msg_ok "Configured container for Docker"
 
 msg_info "Starting container"
