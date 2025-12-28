@@ -9,6 +9,17 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+# NFS Configuration
+NFS_SERVER="10.1.1.16"
+NFS_SHARE="/mnt/data"
+NFS_MOUNT="/mnt/data"
+NFS_OPTIONS="rsize=1048576,wsize=1048576,hard,noatime,nodiratime,timeo=600,retrans=5"
+MUSIC_PATH="/mnt/data/media/tidarr"
+
+echo "==> Setting root password"
+echo "root:tidarr" | chpasswd
+echo "Root password set to: tidarr (change it after first login!)"
+
 echo "==> Updating system"
 apt-get update
 apt-get upgrade -y
@@ -18,7 +29,25 @@ apt-get install -y \
   ca-certificates \
   curl \
   gnupg \
-  lsb-release
+  lsb-release \
+  nfs-common
+
+echo "==> Setting up NFS mount"
+mkdir -p "$NFS_MOUNT"
+
+# Add to fstab if not already present
+if ! grep -q "$NFS_SERVER:$NFS_SHARE" /etc/fstab; then
+  echo "${NFS_SERVER}:${NFS_SHARE} ${NFS_MOUNT} nfs4 ${NFS_OPTIONS} 0 0" >> /etc/fstab
+  echo "Added NFS mount to /etc/fstab"
+fi
+
+# Mount NFS
+echo "==> Mounting NFS share"
+mount -a
+echo "NFS mounted successfully"
+
+# Create music directory on NFS if it doesn't exist
+mkdir -p "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
@@ -37,8 +66,8 @@ apt-get install -y \
 systemctl enable --now docker
 
 echo "==> Setting up Tidarr"
-mkdir -p /opt/tidarr/{config,music}
-chmod 755 /opt/tidarr /opt/tidarr/config /opt/tidarr/music
+mkdir -p /opt/tidarr/config
+chmod 755 /opt/tidarr /opt/tidarr/config
 
 cat >/opt/tidarr/Dockerfile <<'EOF'
 FROM cstaelen/tidarr:latest
@@ -48,7 +77,7 @@ RUN (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y 
     true
 EOF
 
-cat >/opt/tidarr/compose.yml <<'EOF'
+cat >/opt/tidarr/compose.yml <<EOF
 services:
   tidarr:
     build:
@@ -60,7 +89,7 @@ services:
       - "8484:8484"
     volumes:
       - /opt/tidarr/config:/shared
-      - /opt/tidarr/music:/music
+      - ${MUSIC_PATH}:/music
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -93,3 +122,6 @@ apt-get -y autoremove
 apt-get -y autoclean
 
 echo "==> Done!"
+echo ""
+echo "Login credentials: root / tidarr"
+echo "Music will be saved to: $MUSIC_PATH"
