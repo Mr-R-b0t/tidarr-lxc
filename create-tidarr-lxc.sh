@@ -88,27 +88,24 @@ get_template() {
   local os="${2:-debian}"
   local version="${3:-12}"
   
-  msg_info "Updating template list" >&2
-  pveam update >&2
-  msg_ok "Updated template list" >&2
+  pveam available -section system | grep -i "${os}-${version}" | head -1 | awk '{print $2}'
+}
+
+download_template() {
+  local template_storage="${1:-local}"
+  local template="$2"
   
-  local template
-  template=$(pveam available -section system | grep -i "${os}-${version}" | head -1 | awk '{print $2}')
-  
-  if [[ -z "$template" ]]; then
-    msg_error "No template found for ${os}-${version}" >&2
-    exit 1
-  fi
+  msg_info "Updating template list"
+  pveam update
+  msg_ok "Updated template list"
   
   if ! pveam list "$template_storage" | grep -q "$template"; then
-    msg_info "Downloading template: $template" >&2
-    pveam download "$template_storage" "$template" >&2
-    msg_ok "Downloaded template" >&2
+    msg_info "Downloading template: $template"
+    pveam download "$template_storage" "$template"
+    msg_ok "Downloaded template"
   else
-    msg_ok "Template already available: $template" >&2
+    msg_ok "Template already available: $template"
   fi
-  
-  echo "${template_storage}:vztmpl/${template}"
 }
 
 # =========================
@@ -123,6 +120,13 @@ CTID=$(get_next_ctid)
 HOSTNAME="tidarr"
 STORAGE=$(get_default_storage)
 NET_CONFIG="name=eth0,bridge=vmbr0,ip=dhcp"
+TEMPLATE_NAME=$(get_template "local" "$var_os" "$var_version")
+TEMPLATE="local:vztmpl/${TEMPLATE_NAME}"
+
+if [[ -z "$TEMPLATE_NAME" ]]; then
+  msg_error "No template found for ${var_os}-${var_version}"
+  exit 1
+fi
 
 echo -e "${YW}Creating LXC container for ${APP} with the following settings:${CL}"
 echo -e "  CTID:     ${GN}$CTID${CL}"
@@ -132,10 +136,11 @@ echo -e "  CPU:      ${GN}$var_cpu cores${CL}"
 echo -e "  RAM:      ${GN}$var_ram MB${CL}"
 echo -e "  Disk:     ${GN}$var_disk GB${CL}"
 echo -e "  Network:  ${GN}DHCP${CL}"
+echo -e "  Template: ${GN}$TEMPLATE_NAME${CL}"
 echo ""
 
-# Get template
-TEMPLATE=$(get_template "local" "$var_os" "$var_version")
+# Download template if needed
+download_template "local" "$TEMPLATE_NAME"
 
 msg_info "Creating LXC container $CTID"
 pct create "$CTID" "$TEMPLATE" \
