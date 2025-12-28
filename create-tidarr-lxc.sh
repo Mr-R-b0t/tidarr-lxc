@@ -64,7 +64,8 @@ check_proxmox() {
 
 get_next_ctid() {
   local ctid=150
-  while pct status "$ctid" &>/dev/null || qm status "$ctid" &>/dev/null; do
+  # Check both LXC containers (pct) and VMs (qm)
+  while pct status "$ctid" &>/dev/null || qm config "$ctid" &>/dev/null; do
     ((ctid++))
   done
   echo "$ctid"
