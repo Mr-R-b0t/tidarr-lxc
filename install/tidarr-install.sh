@@ -1,45 +1,42 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2025 community-scripts ORG
+# Copyright (c) 2021-2025 Mr-R-b0t
 # Author: Mr-R-b0t
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# License: MIT
 # Source: https://github.com/cstaelen/tidarr
 
-source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
-color
-verb_ip6
-catch_errors
-setting_up_container
-network_check
-update_os
+set -euo pipefail
 
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
+export DEBIAN_FRONTEND=noninteractive
+
+echo "==> Updating system"
+apt-get update
+apt-get upgrade -y
+
+echo "==> Installing dependencies"
+apt-get install -y \
   ca-certificates \
   curl \
   gnupg \
   lsb-release
-msg_ok "Installed Dependencies"
 
-msg_info "Setting up Docker Repository"
+echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" >/etc/apt/sources.list.d/docker.list
-$STD apt-get update
-msg_ok "Set up Docker Repository"
+apt-get update
 
-msg_info "Installing Docker"
-$STD apt-get install -y \
+echo "==> Installing Docker"
+apt-get install -y \
   docker-ce \
   docker-ce-cli \
   containerd.io \
   docker-buildx-plugin \
   docker-compose-plugin
-systemctl enable -q --now docker
-msg_ok "Installed Docker"
+systemctl enable --now docker
 
-msg_info "Setting up Tidarr"
+echo "==> Setting up Tidarr"
 mkdir -p /opt/tidarr/{config,music}
 chmod 755 /opt/tidarr /opt/tidarr/config /opt/tidarr/music
 
@@ -86,17 +83,13 @@ services:
       - --schedule
       - "0 0 4 * * *"
 EOF
-msg_ok "Set up Tidarr"
 
-msg_info "Starting Tidarr"
+echo "==> Starting Tidarr"
 cd /opt/tidarr
-$STD docker compose up -d --build
-msg_ok "Started Tidarr"
+docker compose up -d --build
 
-motd_ssh
-customize
+echo "==> Cleaning up"
+apt-get -y autoremove
+apt-get -y autoclean
 
-msg_info "Cleaning up"
-$STD apt-get -y autoremove
-$STD apt-get -y autoclean
-msg_ok "Cleaned"
+echo "==> Done!"
