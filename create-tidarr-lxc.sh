@@ -14,8 +14,6 @@ RD=$(echo "\033[01;31m")
 YW=$(echo "\033[33m")
 GN=$(echo "\033[1;92m")
 CL=$(echo "\033[m")
-BFR="\\r\\033[K"
-HOLD=" "
 CM="${GN}✓${CL}"
 CROSS="${RD}✗${CL}"
 
@@ -33,9 +31,9 @@ INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Mr-R-b0t/tidarr-lxc/main/i
 # =========================
 # Helper Functions
 # =========================
-msg_info() { echo -ne " ${HOLD} ${YW}$1...${CL}"; }
-msg_ok() { echo -e "${BFR} ${CM} ${GN}$1${CL}"; }
-msg_error() { echo -e "${BFR} ${CROSS} ${RD}$1${CL}"; }
+msg_info() { echo -e " [...] ${YW}$1${CL}"; }
+msg_ok() { echo -e " ${CM} ${GN}$1${CL}"; }
+msg_error() { echo -e " ${CROSS} ${RD}$1${CL}"; }
 
 header_info() {
   clear
@@ -72,23 +70,16 @@ get_next_ctid() {
   echo "$ctid"
 }
 
-select_storage() {
+get_default_storage() {
   local storage_list
-  storage_list=$(pvesm status -content rootdir | awk 'NR>1 {print $1}')
+  storage_list=$(pvesm status -content rootdir | awk 'NR>1 {print $1}' | head -1)
   
   if [[ -z "$storage_list" ]]; then
     msg_error "No storage available for containers"
     exit 1
   fi
   
-  echo -e "${YW}Available storage pools:${CL}"
-  echo "$storage_list" | nl -w2 -s'. '
-  
-  local default_storage
-  default_storage=$(echo "$storage_list" | head -1)
-  
-  read -rp "Select storage (default: $default_storage): " STORAGE
-  STORAGE="${STORAGE:-$default_storage}"
+  echo "$storage_list"
 }
 
 get_template() {
@@ -97,7 +88,7 @@ get_template() {
   local version="${3:-12}"
   
   msg_info "Updating template list"
-  pveam update &>/dev/null
+  pveam update
   msg_ok "Updated template list"
   
   local template
@@ -110,8 +101,10 @@ get_template() {
   
   if ! pveam list "$template_storage" | grep -q "$template"; then
     msg_info "Downloading template: $template"
-    pveam download "$template_storage" "$template" &>/dev/null
+    pveam download "$template_storage" "$template"
     msg_ok "Downloaded template"
+  else
+    msg_ok "Template already available: $template"
   fi
   
   echo "${template_storage}:vztmpl/${template}"
@@ -124,41 +117,25 @@ header_info
 check_root
 check_proxmox
 
-echo -e "${YW}This will create a new LXC container for ${APP}${CL}\n"
+# Auto-detect values
+CTID=$(get_next_ctid)
+HOSTNAME="tidarr"
+STORAGE=$(get_default_storage)
+NET_CONFIG="name=eth0,bridge=vmbr0,ip=dhcp"
 
-# Get CTID
-DEFAULT_CTID=$(get_next_ctid)
-read -rp "Container ID (default: $DEFAULT_CTID): " CTID
-CTID="${CTID:-$DEFAULT_CTID}"
-
-if pct status "$CTID" &>/dev/null; then
-  msg_error "Container ID $CTID already exists"
-  exit 1
-fi
-
-# Get hostname
-read -rp "Hostname (default: tidarr): " HOSTNAME
-HOSTNAME="${HOSTNAME:-tidarr}"
-
-# Select storage
-select_storage
-
-# Get network config
-read -rp "Use DHCP? (y/n, default: y): " USE_DHCP
-USE_DHCP="${USE_DHCP:-y}"
-
-if [[ "${USE_DHCP,,}" == "n" ]]; then
-  read -rp "IP Address (CIDR, e.g., 10.1.1.50/24): " IP_ADDR
-  read -rp "Gateway: " GATEWAY
-  NET_CONFIG="name=eth0,bridge=vmbr0,ip=${IP_ADDR},gw=${GATEWAY}"
-else
-  NET_CONFIG="name=eth0,bridge=vmbr0,ip=dhcp"
-fi
+echo -e "${YW}Creating LXC container for ${APP} with the following settings:${CL}"
+echo -e "  CTID:     ${GN}$CTID${CL}"
+echo -e "  Hostname: ${GN}$HOSTNAME${CL}"
+echo -e "  Storage:  ${GN}$STORAGE${CL}"
+echo -e "  CPU:      ${GN}$var_cpu cores${CL}"
+echo -e "  RAM:      ${GN}$var_ram MB${CL}"
+echo -e "  Disk:     ${GN}$var_disk GB${CL}"
+echo -e "  Network:  ${GN}DHCP${CL}"
+echo ""
 
 # Get template
 TEMPLATE=$(get_template "local" "$var_os" "$var_version")
 
-echo ""
 msg_info "Creating LXC container $CTID"
 pct create "$CTID" "$TEMPLATE" \
   --hostname "$HOSTNAME" \
@@ -169,37 +146,44 @@ pct create "$CTID" "$TEMPLATE" \
   --net0 "$NET_CONFIG" \
   --unprivileged 0 \
   --features "nesting=1,keyctl=1" \
-  --onboot 1 &>/dev/null
+  --onboot 1
 msg_ok "Created LXC container $CTID"
 
 msg_info "Configuring container for Docker"
-pct set "$CTID" -lxc.apparmor.profile unconfined &>/dev/null
-pct set "$CTID" -lxc.cap.drop "" &>/dev/null
-msg_ok "Configured container"
+pct set "$CTID" -lxc.apparmor.profile unconfined
+pct set "$CTID" -lxc.cap.drop ""
+msg_ok "Configured container for Docker"
 
 msg_info "Starting container"
 pct start "$CTID"
-sleep 5
 msg_ok "Started container"
 
 msg_info "Waiting for network"
 for i in {1..30}; do
   if pct exec "$CTID" -- ping -c1 1.1.1.1 &>/dev/null; then
+    msg_ok "Network is up"
     break
   fi
-  sleep 1
+  echo -e "  Waiting... ($i/30)"
+  sleep 2
 done
-msg_ok "Network is up"
 
 msg_info "Running installation script (this may take a few minutes)"
-pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)" &>/dev/null
+echo ""
+pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)"
+echo ""
 msg_ok "Installation complete"
 
 # Get container IP
+msg_info "Getting container IP address"
+sleep 3
 CONTAINER_IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
+msg_ok "Container IP: $CONTAINER_IP"
 
 echo ""
+echo -e "═══════════════════════════════════════════════════════════"
 msg_ok "Completed Successfully!"
+echo -e "═══════════════════════════════════════════════════════════"
 echo ""
 echo -e "${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${YW}Access it using the following URL:${CL}"
