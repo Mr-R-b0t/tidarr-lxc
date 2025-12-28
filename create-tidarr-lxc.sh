@@ -88,24 +88,24 @@ get_template() {
   local os="${2:-debian}"
   local version="${3:-12}"
   
-  msg_info "Updating template list"
-  pveam update
-  msg_ok "Updated template list"
+  msg_info "Updating template list" >&2
+  pveam update >&2
+  msg_ok "Updated template list" >&2
   
   local template
   template=$(pveam available -section system | grep -i "${os}-${version}" | head -1 | awk '{print $2}')
   
   if [[ -z "$template" ]]; then
-    msg_error "No template found for ${os}-${version}"
+    msg_error "No template found for ${os}-${version}" >&2
     exit 1
   fi
   
   if ! pveam list "$template_storage" | grep -q "$template"; then
-    msg_info "Downloading template: $template"
-    pveam download "$template_storage" "$template"
-    msg_ok "Downloaded template"
+    msg_info "Downloading template: $template" >&2
+    pveam download "$template_storage" "$template" >&2
+    msg_ok "Downloaded template" >&2
   else
-    msg_ok "Template already available: $template"
+    msg_ok "Template already available: $template" >&2
   fi
   
   echo "${template_storage}:vztmpl/${template}"
