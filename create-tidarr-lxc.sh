@@ -64,7 +64,7 @@ check_proxmox() {
 
 get_next_ctid() {
   local ctid=100
-  while pct status "$ctid" &>/dev/null; do
+  while pct status "$ctid" &>/dev/null || qm status "$ctid" &>/dev/null; do
     ((ctid++))
   done
   echo "$ctid"
