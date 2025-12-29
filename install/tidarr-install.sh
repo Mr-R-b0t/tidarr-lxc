@@ -86,10 +86,15 @@ RUN (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y 
     (command -v apk >/dev/null 2>&1 && apk add --no-cache curl) || \
     (command -v microdnf >/dev/null 2>&1 && microdnf install -y curl && microdnf clean all) || \
     true
-# Set umask so new files get group write permissions and setgid is inherited
-RUN echo "umask 002" >> /etc/profile && \
-    echo "umask 002" >> /etc/bash.bashrc 2>/dev/null || true
-ENV UMASK=002
+
+# Create entrypoint wrapper that sets umask
+RUN echo '#!/bin/sh' > /entrypoint-wrapper.sh && \
+    echo 'umask 002' >> /entrypoint-wrapper.sh && \
+    echo 'exec "$@"' >> /entrypoint-wrapper.sh && \
+    chmod +x /entrypoint-wrapper.sh
+
+ENTRYPOINT ["/entrypoint-wrapper.sh"]
+CMD ["node", "server.js"]
 EOF
 
 cat >/opt/tidarr/compose.yml <<EOF
