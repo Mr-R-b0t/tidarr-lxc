@@ -16,6 +16,11 @@ NFS_MOUNT="/mnt/data"
 NFS_OPTIONS="rsize=1048576,wsize=1048576,hard,noatime,nodiratime,timeo=600,retrans=5"
 MUSIC_PATH="/mnt/data/media/tidarr"
 
+# User/Group configuration (match NFS server)
+PUID=0
+PGID=1000
+GROUP_NAME="poulette"
+
 echo "==> Setting root password"
 echo "root:tidarr" | chpasswd
 echo "Root password set to: tidarr (change it after first login!)"
@@ -31,6 +36,9 @@ apt-get install -y \
   gnupg \
   lsb-release \
   nfs-common
+
+echo "==> Creating group ${GROUP_NAME} with GID ${PGID}"
+groupadd -g "$PGID" "$GROUP_NAME" 2>/dev/null || true
 
 echo "==> Setting up NFS mount"
 mkdir -p "$NFS_MOUNT"
@@ -49,8 +57,8 @@ echo "NFS mounted successfully"
 # Create music directory on NFS if it doesn't exist
 mkdir -p "$MUSIC_PATH"
 # Set setgid bit so new files inherit group ownership
+chown root:"$GROUP_NAME" "$MUSIC_PATH"
 chmod 2775 "$MUSIC_PATH"
-chown root:root "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
@@ -78,6 +86,10 @@ RUN (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y 
     (command -v apk >/dev/null 2>&1 && apk add --no-cache curl) || \
     (command -v microdnf >/dev/null 2>&1 && microdnf install -y curl && microdnf clean all) || \
     true
+# Set umask so new files get group write permissions and setgid is inherited
+RUN echo "umask 002" >> /etc/profile && \
+    echo "umask 002" >> /etc/bash.bashrc 2>/dev/null || true
+ENV UMASK=002
 EOF
 
 cat >/opt/tidarr/compose.yml <<EOF
@@ -88,9 +100,11 @@ services:
       dockerfile: Dockerfile
     image: tidarr-with-healthcheck:latest
     container_name: tidarr
+    user: "${PUID}:${PGID}"
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - UMASK=002
     ports:
       - "8484:8484"
     volumes:
