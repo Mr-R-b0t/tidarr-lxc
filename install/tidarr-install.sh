@@ -35,7 +35,8 @@ apt-get install -y \
   curl \
   gnupg \
   lsb-release \
-  nfs-common
+  nfs-common \
+  cron
 
 echo "==> Creating group ${GROUP_NAME} with GID ${PGID}"
 groupadd -g "$PGID" "$GROUP_NAME" 2>/dev/null || true
@@ -86,15 +87,6 @@ RUN (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y 
     (command -v apk >/dev/null 2>&1 && apk add --no-cache curl) || \
     (command -v microdnf >/dev/null 2>&1 && microdnf install -y curl && microdnf clean all) || \
     true
-
-# Create entrypoint wrapper that sets umask
-RUN echo '#!/bin/sh' > /entrypoint-wrapper.sh && \
-    echo 'umask 002' >> /entrypoint-wrapper.sh && \
-    echo 'exec "$@"' >> /entrypoint-wrapper.sh && \
-    chmod +x /entrypoint-wrapper.sh
-
-ENTRYPOINT ["/entrypoint-wrapper.sh"]
-CMD ["node", "server.js"]
 EOF
 
 cat >/opt/tidarr/compose.yml <<EOF
@@ -105,11 +97,7 @@ services:
       dockerfile: Dockerfile
     image: tidarr-with-healthcheck:latest
     container_name: tidarr
-    user: "${PUID}:${PGID}"
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - UMASK=002
+    user: "0:${PGID}"
     ports:
       - "8484:8484"
     volumes:
@@ -137,6 +125,20 @@ services:
       - --schedule
       - "0 0 4 * * *"
 EOF
+
+# Create a systemd override to fix permissions after tidarr creates files
+cat >/opt/tidarr/fix-permissions.sh <<'FIXPERM'
+#!/bin/bash
+# Fix permissions on music directory
+find /mnt/data/media/tidarr -type d ! -perm 2775 -exec chmod 2775 {} \;
+find /mnt/data/media/tidarr -type f ! -perm 664 -exec chmod 664 {} \;
+chown -R root:poulette /mnt/data/media/tidarr
+FIXPERM
+chmod +x /opt/tidarr/fix-permissions.sh
+
+# Add cron job to fix permissions every 5 minutes
+echo "*/5 * * * * root /opt/tidarr/fix-permissions.sh >/dev/null 2>&1" > /etc/cron.d/tidarr-permissions
+chmod 644 /etc/cron.d/tidarr-permissions
 
 echo "==> Starting Tidarr"
 cd /opt/tidarr
