@@ -48,6 +48,9 @@ echo "NFS mounted successfully"
 
 # Create music directory on NFS if it doesn't exist
 mkdir -p "$MUSIC_PATH"
+# Set setgid bit so new files inherit group ownership
+chmod 2775 "$MUSIC_PATH"
+chown root:root "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
@@ -85,6 +88,9 @@ services:
       dockerfile: Dockerfile
     image: tidarr-with-healthcheck:latest
     container_name: tidarr
+    environment:
+      - PUID=0
+      - PGID=0
     ports:
       - "8484:8484"
     volumes:
