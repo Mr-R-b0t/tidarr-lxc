@@ -94,7 +94,8 @@ RUN (command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y 
 EOF
 
 cat >/opt/tidarr/compose.yml <<EOF
-services:  tidarr:
+services:
+  tidarr:
     build:
       context: .
       dockerfile: Dockerfile

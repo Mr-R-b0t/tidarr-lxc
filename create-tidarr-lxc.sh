@@ -63,9 +63,9 @@ check_proxmox() {
 }
 
 get_next_ctid() {
-  local ctid=150
+  local ctid=100
   # Check both LXC containers (pct) and VMs (qm)
-  while pct status "$ctid" &>/dev/null || qm config "$ctid" &>/dev/null; do
+  while pct status "$ctid" &>/dev/null 2>&1 || qm config "$ctid" &>/dev/null 2>&1; do
     ((ctid++))
   done
   echo "$ctid"
@@ -152,7 +152,10 @@ pct create "$CTID" "$TEMPLATE" \
   --net0 "$NET_CONFIG" \
   --unprivileged 0 \
   --features "nesting=1" \
-  --onboot 1
+  --onboot 1 || {
+  msg_error "Failed to create container"
+  exit 1
+}
 msg_ok "Created LXC container $CTID"
 
 msg_info "Configuring container for Docker"
