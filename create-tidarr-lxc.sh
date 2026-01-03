@@ -151,7 +151,7 @@ pct create "$CTID" "$TEMPLATE" \
   --rootfs "${STORAGE}:${var_disk}" \
   --net0 "$NET_CONFIG" \
   --unprivileged 0 \
-  --features "nesting=1,keyctl=1" \
+  --features "nesting=1" \
   --onboot 1
 msg_ok "Created LXC container $CTID"
 
@@ -160,12 +160,8 @@ msg_info "Configuring container for Docker"
 cat >> /etc/pve/lxc/${CTID}.conf <<EOF
 lxc.apparmor.profile: unconfined
 lxc.cap.drop: 
-lxc.idmap: u 0 100000 999
-lxc.idmap: g 0 100000 988
-lxc.idmap: u 999 999 1
-lxc.idmap: g 988 988 1
-lxc.idmap: u 1000 101000 64536
-lxc.idmap: g 989 100989 64547
+lxc.cgroup2.devices.allow: a
+lxc.mount.auto: proc:rw sys:rw
 EOF
 msg_ok "Configured container for Docker"
 
