@@ -173,18 +173,29 @@ pct start "$CTID"
 msg_ok "Started container"
 
 msg_info "Waiting for network"
+NETWORK_READY=0
 for i in {1..30}; do
-  if pct exec "$CTID" -- ping -c1 1.1.1.1 &>/dev/null; then
+  if pct exec "$CTID" -- ping -c1 8.8.8.8 &>/dev/null 2>&1; then
     msg_ok "Network is up"
+    NETWORK_READY=1
     break
   fi
   echo -e "  Waiting... ($i/30)"
   sleep 2
 done
 
+if [[ $NETWORK_READY -eq 0 ]]; then
+  msg_error "Network timeout - container may not have internet access"
+  echo "Container IP: $(pct exec "$CTID" -- hostname -I 2>/dev/null || echo 'unknown')"
+  exit 1
+fi
+
 msg_info "Running installation script (this may take a few minutes)"
 echo ""
-pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)"
+timeout 600 pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)" || {
+  msg_error "Installation script timed out or failed"
+  exit 1
+}
 echo ""
 msg_ok "Installation complete"
 
