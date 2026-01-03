@@ -143,6 +143,8 @@ echo ""
 download_template "local" "$TEMPLATE_NAME"
 
 msg_info "Creating LXC container $CTID"
+echo "  Using template: $TEMPLATE"
+echo "  Storage: $STORAGE"
 pct create "$CTID" "$TEMPLATE" \
   --hostname "$HOSTNAME" \
   --cores "$var_cpu" \
@@ -169,35 +171,41 @@ EOF
 msg_ok "Configured container for Docker"
 
 msg_info "Starting container"
-pct start "$CTID"
+pct start "$CTID" || {
+  msg_error "Failed to start container"
+  exit 1
+}
 msg_ok "Started container"
 
-msg_info "Waiting for network"
+msg_info "Waiting for network (max 60 seconds)"
 NETWORK_READY=0
-for i in {1..30}; do
-  if pct exec "$CTID" -- ping -c1 8.8.8.8 &>/dev/null 2>&1; then
+for i in {1..60}; do
+  if pct exec "$CTID" -- timeout 2 ping -c1 8.8.8.8 &>/dev/null 2>&1; then
     msg_ok "Network is up"
     NETWORK_READY=1
     break
   fi
-  echo -e "  Waiting... ($i/30)"
-  sleep 2
+  if [ $((i % 10)) -eq 0 ]; then
+    echo "  Still waiting... ($i/60)"
+  fi
+  sleep 1
 done
 
 if [[ $NETWORK_READY -eq 0 ]]; then
   msg_error "Network timeout - container may not have internet access"
-  echo "Container IP: $(pct exec "$CTID" -- hostname -I 2>/dev/null || echo 'unknown')"
   exit 1
 fi
 
-msg_info "Running installation script (this may take a few minutes)"
+msg_info "Running installation script (this may take several minutes)"
 echo ""
-timeout 600 pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)" || {
-  msg_error "Installation script timed out or failed"
+if timeout 900 pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)"; then
+  msg_ok "Installation complete"
+else
+  INSTALL_EXIT=$?
+  msg_error "Installation script failed with exit code $INSTALL_EXIT"
   exit 1
-}
+fi
 echo ""
-msg_ok "Installation complete"
 
 # Get container IP
 msg_info "Getting container IP address"

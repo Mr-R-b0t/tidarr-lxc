@@ -9,10 +9,6 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Enable command output logging
-exec 1> >(tee -a /var/log/tidarr-install.log)
-exec 2>&1
-
 echo "[$(date)] Starting Tidarr installation..."
 NFS_SERVER="10.1.1.16"
 NFS_SHARE="/mnt/data"
@@ -52,27 +48,15 @@ useradd -u "$PUID" -g "$PGID" -M -s /usr/sbin/nologin "$USER_NAME" 2>/dev/null |
 echo "==> Setting up NFS mount"
 mkdir -p "$NFS_MOUNT"
 
-# Check if NFS server is reachable
-echo "==> Checking NFS server connectivity"
-if ! timeout 10 ping -c1 "$NFS_SERVER" &>/dev/null; then
-  echo "Warning: NFS server $NFS_SERVER is not reachable"
-  echo "Continuing without NFS mount..."
-else
-  echo "NFS server is reachable"
-  
-  # Add to fstab if not already present
+# Optional: Try to mount NFS if server is available
+if timeout 5 ping -c1 "$NFS_SERVER" &>/dev/null 2>&1; then
+  echo "NFS server is reachable, attempting to mount..."
   if ! grep -q "$NFS_SERVER:$NFS_SHARE" /etc/fstab; then
     echo "${NFS_SERVER}:${NFS_SHARE} ${NFS_MOUNT} nfs4 ${NFS_OPTIONS} 0 0" >> /etc/fstab
-    echo "Added NFS mount to /etc/fstab"
   fi
-
-  # Mount NFS
-  echo "==> Mounting NFS share"
-  if mount -a 2>/dev/null; then
-    echo "NFS mounted successfully"
-  else
-    echo "Warning: Failed to mount NFS, continuing without it..."
-  fi
+  mount -a 2>/dev/null || echo "NFS mount failed, continuing..."
+else
+  echo "NFS server not reachable, skipping NFS mount"
 fi
 
 # Create music directory on NFS if it doesn't exist
@@ -162,14 +146,10 @@ chmod 644 /etc/cron.d/tidarr-permissions
 
 echo "==> Starting Tidarr"
 cd /opt/tidarr
-timeout 300 docker compose up -d --build || {
-  echo "Docker compose timed out or failed, checking status..."
-  docker compose logs || true
-  exit 1
-}
+docker compose up -d --build
 
-echo "Waiting for services to stabilize..."
-sleep 10
+echo "Waiting for services to start..."
+sleep 15
 
 echo "==> Cleaning up"
 apt-get -y autoremove
