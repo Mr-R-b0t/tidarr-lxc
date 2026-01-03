@@ -59,7 +59,7 @@ else
   echo "NFS server not reachable, skipping NFS mount"
 fi
 
-# Create music directory on NFS if it doesn't exist
+# Create music directory if it doesn't exist
 mkdir -p "$MUSIC_PATH"
 # Set setgid bit so new files inherit group ownership
 chown "$PUID":"$PGID" "$MUSIC_PATH"

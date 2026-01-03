@@ -143,8 +143,6 @@ echo ""
 download_template "local" "$TEMPLATE_NAME"
 
 msg_info "Creating LXC container $CTID"
-echo "  Using template: $TEMPLATE"
-echo "  Storage: $STORAGE"
 pct create "$CTID" "$TEMPLATE" \
   --hostname "$HOSTNAME" \
   --cores "$var_cpu" \
@@ -153,11 +151,8 @@ pct create "$CTID" "$TEMPLATE" \
   --rootfs "${STORAGE}:${var_disk}" \
   --net0 "$NET_CONFIG" \
   --unprivileged 0 \
-  --features "nesting=1" \
-  --onboot 1 || {
-  msg_error "Failed to create container"
-  exit 1
-}
+  --features "nesting=1,keyctl=1" \
+  --onboot 1
 msg_ok "Created LXC container $CTID"
 
 msg_info "Configuring container for Docker"
@@ -165,47 +160,28 @@ msg_info "Configuring container for Docker"
 cat >> /etc/pve/lxc/${CTID}.conf <<EOF
 lxc.apparmor.profile: unconfined
 lxc.cap.drop: 
-lxc.cgroup2.devices.allow: a
-lxc.mount.auto: proc:rw sys:rw
 EOF
 msg_ok "Configured container for Docker"
 
 msg_info "Starting container"
-pct start "$CTID" || {
-  msg_error "Failed to start container"
-  exit 1
-}
+pct start "$CTID"
 msg_ok "Started container"
 
-msg_info "Waiting for network (max 60 seconds)"
-NETWORK_READY=0
-for i in {1..60}; do
-  if pct exec "$CTID" -- timeout 2 ping -c1 8.8.8.8 &>/dev/null 2>&1; then
+msg_info "Waiting for network"
+for i in {1..30}; do
+  if pct exec "$CTID" -- ping -c1 8.8.8.8 &>/dev/null 2>&1; then
     msg_ok "Network is up"
-    NETWORK_READY=1
     break
   fi
-  if [ $((i % 10)) -eq 0 ]; then
-    echo "  Still waiting... ($i/60)"
-  fi
-  sleep 1
+  echo "  Waiting... ($i/30)"
+  sleep 2
 done
 
-if [[ $NETWORK_READY -eq 0 ]]; then
-  msg_error "Network timeout - container may not have internet access"
-  exit 1
-fi
-
-msg_info "Running installation script (this may take several minutes)"
+msg_info "Running installation script (this may take a few minutes)"
 echo ""
-if timeout 900 pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)"; then
-  msg_ok "Installation complete"
-else
-  INSTALL_EXIT=$?
-  msg_error "Installation script failed with exit code $INSTALL_EXIT"
-  exit 1
-fi
+pct exec "$CTID" -- bash -c "$(curl -fsSL $INSTALL_SCRIPT_URL)"
 echo ""
+msg_ok "Installation complete"
 
 # Get container IP
 msg_info "Getting container IP address"
