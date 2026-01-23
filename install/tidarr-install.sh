@@ -83,7 +83,6 @@ services:
       dockerfile: Dockerfile
     image: tidarr-with-healthcheck:latest
     container_name: tidarr
-    user: "${PUID}:${PGID}"
     ports:
       - "8484:8484"
     volumes:
