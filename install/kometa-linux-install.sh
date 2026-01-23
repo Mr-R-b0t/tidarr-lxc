@@ -13,10 +13,15 @@ export DEBIAN_FRONTEND=noninteractive
 KOMETA_USER="kometa"
 KOMETA_GROUP="kometa"
 KOMETA_HOME="/opt/kometa"
-CONFIG_PATH="${KOMETA_HOME}/config"
+QUICKSTART_REPO="https://github.com/Kometa-Team/Quickstart"
+QUICKSTART_BRANCH="develop"
+CONFIG_PATH="${KOMETA_HOME}/Quickstart/config"
 LOGS_PATH="${KOMETA_HOME}/logs"
 PUID=100999
 PGID=100990
+
+# Set umask so new files inherit group and have group write permission
+umask 0002
 
 echo "==> Setting root password"
 echo "root:kometa" | chpasswd
@@ -44,15 +49,27 @@ if ! id -u "$KOMETA_USER" >/dev/null 2>&1; then
 fi
 
 echo "==> Setting up Kometa directories"
-mkdir -p "$CONFIG_PATH" "$LOGS_PATH"
+mkdir -p "$LOGS_PATH"
 chown -R "$KOMETA_USER":"$KOMETA_GROUP" "$KOMETA_HOME"
 chmod 755 "$KOMETA_HOME"
-chmod 775 "$CONFIG_PATH" "$LOGS_PATH"
+chmod 2775 "$LOGS_PATH"
 
-echo "==> Installing Kometa"
-su - "$KOMETA_USER" -c "python3 -m venv ${KOMETA_HOME}/venv"
-su - "$KOMETA_USER" -c "${KOMETA_HOME}/venv/bin/pip install --upgrade pip"
-su - "$KOMETA_USER" -c "${KOMETA_HOME}/venv/bin/pip install kometa"
+echo "==> Cloning Kometa Quickstart"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME} && git clone ${QUICKSTART_REPO}"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && git checkout ${QUICKSTART_BRANCH}"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && git stash"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && git stash clear"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && git pull"
+
+echo "==> Creating Python virtual environment"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && python3 -m venv venv"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && source venv/bin/activate && python3 -m pip install --upgrade pip"
+su - "$KOMETA_USER" -c "cd ${KOMETA_HOME}/Quickstart && source venv/bin/activate && python3 -m pip install -r requirements.txt"
+
+echo "==> Setting up config directory with setgid"
+mkdir -p "$CONFIG_PATH"
+chown "$KOMETA_USER":"$KOMETA_GROUP" "$CONFIG_PATH"
+chmod 2775 "$CONFIG_PATH"
 
 # Create sample config if it doesn't exist
 if [[ ! -f "$CONFIG_PATH/config.yml" ]]; then
@@ -132,9 +149,9 @@ Wants=network-online.target
 Type=simple
 User=$KOMETA_USER
 Group=$KOMETA_GROUP
-WorkingDirectory=$KOMETA_HOME
-Environment="PATH=${KOMETA_HOME}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${KOMETA_HOME}/venv/bin/kometa --config ${CONFIG_PATH}/config.yml --run
+WorkingDirectory=${KOMETA_HOME}/Quickstart
+Environment="PATH=${KOMETA_HOME}/Quickstart/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=${KOMETA_HOME}/Quickstart/venv/bin/python ${KOMETA_HOME}/Quickstart/kometa.py --config ${CONFIG_PATH}/config.yml --run
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:${LOGS_PATH}/kometa.log
@@ -147,11 +164,22 @@ EOF
 echo "==> Creating run script for manual execution"
 cat >"${KOMETA_HOME}/run.sh" <<EOF
 #!/bin/bash
-cd ${KOMETA_HOME}
-${KOMETA_HOME}/venv/bin/kometa --config ${CONFIG_PATH}/config.yml --run
+cd ${KOMETA_HOME}/Quickstart
+source venv/bin/activate
+python kometa.py --config ${CONFIG_PATH}/config.yml --run
 EOF
 chmod +x "${KOMETA_HOME}/run.sh"
 chown "$KOMETA_USER":"$KOMETA_GROUP" "${KOMETA_HOME}/run.sh"
+
+echo "==> Creating quickstart script for configuration"
+cat >"${KOMETA_HOME}/quickstart.sh" <<EOF
+#!/bin/bash
+cd ${KOMETA_HOME}/Quickstart
+source venv/bin/activate
+python quickstart.py
+EOF
+chmod +x "${KOMETA_HOME}/quickstart.sh"
+chown "$KOMETA_USER":"$KOMETA_GROUP" "${KOMETA_HOME}/quickstart.sh"
 
 echo "==> Creating systemd timer for scheduled runs"
 cat >/etc/systemd/system/kometa.timer <<'EOF'
@@ -179,7 +207,11 @@ echo "==> Done!"
 echo ""
 echo "Login credentials: root / kometa"
 echo ""
-echo "IMPORTANT: Edit the configuration file:"
+echo "FIRST TIME SETUP:"
+echo "  Run Quickstart to configure Kometa:"
+echo "  su - kometa -c '${KOMETA_HOME}/quickstart.sh'"
+echo ""
+echo "  OR manually edit the configuration file:"
 echo "  ${CONFIG_PATH}/config.yml"
 echo ""
 echo "You need to add:"
@@ -190,6 +222,7 @@ echo ""
 echo "Kometa is configured to run daily at 3 AM via systemd timer."
 echo ""
 echo "Useful commands:"
+echo "  Run Quickstart:     su - kometa -c '${KOMETA_HOME}/quickstart.sh'"
 echo "  Run manually:       systemctl start kometa"
 echo "  View logs:          journalctl -u kometa -f"
 echo "  Check timer:        systemctl status kometa.timer"
