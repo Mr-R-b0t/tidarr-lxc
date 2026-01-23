@@ -63,9 +63,9 @@ check_proxmox() {
 }
 
 get_next_ctid() {
-  local ctid=150
+  local ctid=100
   # Check both LXC containers (pct) and VMs (qm)
-  while pct status "$ctid" &>/dev/null || qm config "$ctid" &>/dev/null; do
+  while pct status "$ctid" &>/dev/null 2>&1 || qm config "$ctid" &>/dev/null 2>&1; do
     ((ctid++))
   done
   echo "$ctid"
@@ -169,11 +169,11 @@ msg_ok "Started container"
 
 msg_info "Waiting for network"
 for i in {1..30}; do
-  if pct exec "$CTID" -- ping -c1 1.1.1.1 &>/dev/null; then
+  if pct exec "$CTID" -- ping -c1 8.8.8.8 &>/dev/null 2>&1; then
     msg_ok "Network is up"
     break
   fi
-  echo -e "  Waiting... ($i/30)"
+  echo "  Waiting... ($i/30)"
   sleep 2
 done
 
