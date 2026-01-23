@@ -15,6 +15,8 @@ MUSIC_PATH="/mnt/data/media/music"
 # Permission mapping for container processes
 PUID=100999
 PGID=100990
+GROUP_NAME="tidarr"
+USER_NAME="tidarr"
 
 echo "==> Setting root password"
 echo "root:tidarr" | chpasswd
@@ -32,6 +34,16 @@ apt-get install -y \
   lsb-release \
   cron
 
+echo "==> Creating service user/group"
+groupadd -g "$PGID" "$GROUP_NAME" 2>/dev/null || true
+if ! id -u "$USER_NAME" >/dev/null 2>&1; then
+  useradd -u "$PUID" -g "$PGID" -M -s /usr/sbin/nologin "$USER_NAME"
+fi
+
+echo "==> Preparing media directory"
+mkdir -p "$MUSIC_PATH"
+chown "$USER_NAME":"$GROUP_NAME" "$MUSIC_PATH"
+chmod 775 "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
@@ -51,6 +63,9 @@ systemctl enable --now docker
 
 echo "==> Setting up Tidarr"
 mkdir -p /opt/tidarr/config
+chown -R "$USER_NAME":"$GROUP_NAME" /opt/tidarr
+chmod 755 /opt/tidarr
+chmod 775 /opt/tidarr/config
 
 cat >/opt/tidarr/Dockerfile <<'EOF'
 FROM cstaelen/tidarr:latest
@@ -96,6 +111,9 @@ services:
       - --schedule
       - "0 0 4 * * *"
 EOF
+
+echo "==> Fixing final permissions"
+chown -R "$USER_NAME":"$GROUP_NAME" /opt/tidarr
 
 echo "==> Starting Tidarr"
 cd /opt/tidarr
