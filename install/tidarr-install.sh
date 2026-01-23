@@ -9,7 +9,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Media storage path (local)
+# Media storage path (external mount)
 MUSIC_PATH="/mnt/data/media/music"
 
 # Permission mapping for container processes
@@ -17,6 +17,9 @@ PUID=100999
 PGID=100990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
+
+# Set umask so new files inherit group and have group write permission
+umask 0002
 
 echo "==> Setting root password"
 echo "root:tidarr" | chpasswd
@@ -65,7 +68,7 @@ echo "==> Setting up Tidarr"
 mkdir -p /opt/tidarr/config
 chown -R "$USER_NAME":"$GROUP_NAME" /opt/tidarr
 chmod 755 /opt/tidarr
-chmod 775 /opt/tidarr/config
+chmod 2775 /opt/tidarr/config
 
 cat >/opt/tidarr/Dockerfile <<'EOF'
 FROM cstaelen/tidarr:latest
