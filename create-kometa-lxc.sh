@@ -28,7 +28,7 @@ var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
 
 # Choose installation method
-INSTALL_METHOD="${1:-docker}"  # docker or linux
+INSTALL_METHOD="${1:-linux}"  # docker or linux
 
 if [[ "$INSTALL_METHOD" == "docker" ]]; then
   INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Mr-R-b0t/tidarr-lxc/main/install/kometa-docker-install.sh"
