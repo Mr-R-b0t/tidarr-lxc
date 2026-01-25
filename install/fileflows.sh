@@ -17,7 +17,7 @@ PUID=999
 PGID=990
 
 # Set umask so new files inherit group and have group write permission
-umask 0002
+umask 6775
 
 echo "==> Setting root password"
 echo "root:fileflows" | chpasswd
