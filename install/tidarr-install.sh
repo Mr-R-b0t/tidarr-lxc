@@ -13,8 +13,9 @@ export DEBIAN_FRONTEND=noninteractive
 MUSIC_PATH="/mnt/data/media/music"
 
 # Permission mapping for container processes
-PUID=999
-PGID=990
+# FIXED: Changed to match Plex user (100999:100990)
+PUID=100999
+PGID=100990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
 
@@ -87,6 +88,10 @@ services:
     container_name: tidarr
     ports:
       - "8484:8484"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - UMASK=0022
     volumes:
       - /opt/tidarr/config:/shared
       - ${MUSIC_PATH}:/music
