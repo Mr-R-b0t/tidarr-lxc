@@ -31,6 +31,7 @@ msg_info "Installing Dependencies"
 $STD apt-get install -y \
   ca-certificates \
   curl \
+  ffmpeg \
   jq \
   unzip
 msg_ok "Installed Dependencies"
@@ -44,32 +45,35 @@ msg_ok "Created service user/group"
 
 msg_info "Installing ASP.NET Core Runtime 8.0"
 $STD apt-get install -y --no-install-recommends \
-  dotnet-runtime-8.0
+  dotnet-runtime-8.0 || $STD apt-get install -y --no-install-recommends aspnetcore-runtime-8.0
 msg_ok "Installed ASP.NET Core Runtime 8.0"
 
 msg_info "Setup FileFlows (NODE)"
-mkdir -p /opt/fileflows
+mkdir -p "$FILEFLOWS_HOME"
 temp_file=$(mktemp)
+
 $STD curl -fsSL https://fileflows.com/downloads/zip -o "$temp_file"
-$STD unzip -d /opt/fileflows "$temp_file"
+$STD unzip -o -d "$FILEFLOWS_HOME" "$temp_file"
 
 # Set proper permissions
-$STD chown -R "$FILEFLOWS_USER":"$FILEFLOWS_GROUP" /opt/fileflows
-$STD chmod -R 755 /opt/fileflows
+$STD chown -R "$FILEFLOWS_USER":"$FILEFLOWS_GROUP" "$FILEFLOWS_HOME"
+$STD chmod -R 755 "$FILEFLOWS_HOME"
 
-# Create symlinks for ffmpeg/ffprobe
+# Create symlinks for ffmpeg/ffprobe if they exist
 if command -v ffmpeg &>/dev/null; then
-  $STD ln -svf $(which ffmpeg) /usr/local/bin/ffmpeg || true
+  $STD ln -svf "$(command -v ffmpeg)" /usr/local/bin/ffmpeg || true
 fi
 if command -v ffprobe &>/dev/null; then
-  $STD ln -svf $(which ffprobe) /usr/local/bin/ffprobe || true
+  $STD ln -svf "$(command -v ffprobe)" /usr/local/bin/ffprobe || true
 fi
 
 # Install NODE as a systemd service (headless worker)
-$STD bash -c "cd /opt/fileflows/Node && dotnet FileFlows.Node.dll --systemd install --root true"
-
-# Start/enable service
-systemctl enable -q --now fileflows-node || systemctl enable -q --now fileflows || true
+if [ -f "$FILEFLOWS_HOME/Node/FileFlows.Node.dll" ]; then
+  $STD bash -c "cd $FILEFLOWS_HOME/Node && dotnet FileFlows.Node.dll --systemd install --root true" || true
+  
+  # Start/enable service
+  systemctl enable -q --now fileflows-node || systemctl enable -q --now fileflows || true
+fi
 
 rm -f "$temp_file"
 msg_ok "Setup FileFlows (NODE)"
