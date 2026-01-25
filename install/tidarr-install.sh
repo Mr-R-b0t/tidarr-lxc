@@ -13,8 +13,8 @@ export DEBIAN_FRONTEND=noninteractive
 MUSIC_PATH="/mnt/data/media/music"
 
 # Permission mapping for container processes
-PUID= 999
-PGID= 990
+PUID=999
+PGID=990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
 
