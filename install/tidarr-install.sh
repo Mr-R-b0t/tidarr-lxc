@@ -14,8 +14,8 @@ MUSIC_PATH="/mnt/data/media/music"
 
 # Permission mapping for container processes
 # FIXED: Changed to match Plex user (100999:100990)
-PUID=100999
-PGID=100990
+PUID=999
+PGID=990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
 
