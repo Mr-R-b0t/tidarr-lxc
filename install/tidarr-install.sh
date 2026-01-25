@@ -13,8 +13,8 @@ export DEBIAN_FRONTEND=noninteractive
 MUSIC_PATH="/mnt/data/media/music"
 
 # Permission mapping for container processes
-PUID=100999
-PGID=100990
+PUID= 999
+PGID= 990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
 
@@ -46,7 +46,7 @@ fi
 echo "==> Preparing media directory"
 mkdir -p "$MUSIC_PATH"
 chown "$USER_NAME":"$GROUP_NAME" "$MUSIC_PATH"
-chmod 775 "$MUSIC_PATH"
+chmod -r 775 "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings
