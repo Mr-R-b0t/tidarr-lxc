@@ -46,7 +46,7 @@ fi
 echo "==> Preparing media directory"
 mkdir -p "$MUSIC_PATH"
 chown "$USER_NAME":"$GROUP_NAME" "$MUSIC_PATH"
-chmod -r 775 "$MUSIC_PATH"
+chmod 775 "$MUSIC_PATH"
 
 echo "==> Setting up Docker repository"
 install -m 0755 -d /etc/apt/keyrings

@@ -33,7 +33,8 @@ apt-get install -y \
   curl \
   ffmpeg \
   jq \
-  unzip
+  unzip \
+  wget
 echo "✓ Installed Dependencies"
 
 echo "==> Creating service user/group"
@@ -43,9 +44,15 @@ if ! id -u "$FILEFLOWS_USER" >/dev/null 2>&1; then
 fi
 echo "✓ Created service user/group"
 
+echo "==> Adding Microsoft package repository"
+wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
+rm packages-microsoft-prod.deb
+apt-get update
+echo "✓ Added Microsoft package repository"
+
 echo "==> Installing ASP.NET Core Runtime 8.0"
-apt-get install -y --no-install-recommends \
-  dotnet-runtime-8.0 || apt-get install -y --no-install-recommends aspnetcore-runtime-8.0
+apt-get install -y aspnetcore-runtime-8.0
 echo "✓ Installed ASP.NET Core Runtime 8.0"
 
 echo "==> Setup FileFlows (NODE)"
