@@ -18,8 +18,7 @@ PGID=990
 GROUP_NAME="tidarr"
 USER_NAME="tidarr"
 
-# Set umask so new files inherit group and have group write permission
-umask 0002
+
 
 echo "==> Setting root password"
 echo "root:tidarr" | chpasswd
